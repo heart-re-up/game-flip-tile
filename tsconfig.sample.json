@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.base",
+  "compilerOptions": {
+    "verbatimModuleSyntax": false,
+    "rootDir": ".",
+    "outDir": "./dist-sample",
+    "declarationDir": "./dist-sample"
+  },
+  "include": ["__sample__/**/*.*ts", "src/**/*.*ts"]
+}

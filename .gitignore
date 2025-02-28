@@ -134,3 +134,6 @@ dist
 
 # Windows
 Thumbs.db
+
+# Cursor
+.cursorrules

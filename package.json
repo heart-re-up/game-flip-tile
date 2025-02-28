@@ -1,7 +1,7 @@
 {
-	"name": "template-ts-single-module",
+	"name": "game-flip-tile",
 	"version": "0.0.1",
-	"description": "A template for pure typescript single module project.",
+	"description": "A tile flipping game with predefined prize information.",
 	"type": "module",
 	"main": "dist/index.cjs",
 	"module": "dist/index.js",
@@ -20,16 +20,20 @@
 		"test": "vitest",
 		"test:watch": "vitest --watch",
 		"test:coverage": "vitest --coverage",
-		"dev": "node src/index.mts",
-		"build": "rimraf dist && tsup --config tsup.config.ts",
+		"dev": "node dist/index.js",
+		"build": "rimraf dist && tsup --config tsup.config.build.ts",
+		"build:sample": "rimraf dist-sample && tsup --config tsup.config.sample.ts",
+		"sample": "pnpm build:sample && node dist-sample/index.js",
 		"prepare": "pnpm build",
 		"lint": "eslint src --config eslint.config.ts",
 		"format": "prettier --write \"src/**/*.ts\""
 	},
 	"keywords": [
-		"template",
-		"typescript",
-		"module"
+		"game",
+		"tile",
+		"flip",
+		"prize",
+		"typescript"
 	],
 	"author": {
 		"name": "heart-re-up",
@@ -53,5 +57,10 @@
 		"typescript": "^5.7.3",
 		"typescript-eslint": "^8.22.0",
 		"vitest": "^3.0.4"
+	},
+	"dependencies": {
+		"@castore/core": "^2.4.1",
+		"@castore/event-storage-adapter-in-memory": "^2.4.1",
+		"rand-seed": "^2.1.7"
 	}
 }

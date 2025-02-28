@@ -1,227 +1,212 @@
-# template-ts-single-module
+# Game Flip Tile (게임 타일 뒤집기)
 
-A Template for a Pure TypeScript Single Module Project
+타일을 뒤집어 상품을 찾는 게임 모듈입니다. 이 모듈은 다양한 환경에서 재사용 가능하며, 서버와 클라이언트 간의 상태 동기화를 위한 리듀서 패턴을 지원합니다.
 
-# package.json
+## 주요 기능
 
-## `type`
+- 자동으로 계산되는 보드 크기 (너비 \* 높이)
+- 익명 사용자 ID 기록
+- 상품 배치 및 발견 시스템
+- 게임 로그 기록
+- 게임 상태 저장 및 불러오기
+- 리듀서 패턴을 통한 상태 관리
 
-`type` specifies the module system.
-
-- `module`: ECMAScript modules
-- `commonjs`: CommonJS modules
-
-However, `tsup` is used for building, so `type` is set to `module` by default.
-`tsup` will generate `.js` files for `esm` and `.cjs` files for `commonjs`.
-
-> When setting `type` to `commonjs`, `tsup` will generate `.js` files for `commonjs` and `.mjs` files for `esm`.
-
-| type       | `.js`file | `.cjs`file | `.mjs`file |
-| :--------- | :-------- | :--------- | :--------- |
-| `module`   | `esm`     | `cjs`      | -          |
-| `commonjs` | `cjs`     | -          | `esm`      |
-
-# tsconfig.json
-
-> This section only explains options that affect the build output.
-
-## `compilerOptions.target`
-
-> `es2017` is set as the default value.
-
-The `target` option is used to specify which JavaScript version your code will be compiled to for the execution environment.
-
-The following is `TypeScript` source code.
-
-```typescript
-// src/index.mts
-const main = async (...args: (string | object)[]) => {
-  console.log(args);
-};
-```
-
-The `target` to equal or greater than `es2017(es8)`:
-
-```javascript
-// dist/index.js
-var main = async (...args) => {
-  console.log(args);
-};
-```
-
-When you set the `target` to a version lower than `es2017(es8)`, such as `es2016(es7)` or `es2015(es6)`:
-
-```javascript
-// dist/index.js
-var __async = (__this, __arguments, generator) => {
-  return new Promise((resolve, reject) => {
-    var fulfilled = (value) => {
-      try {
-        step(generator.next(value));
-      } catch (e) {
-        reject(e);
-      }
-    };
-    var rejected = (value) => {
-      try {
-        step(generator.throw(value));
-      } catch (e) {
-        reject(e);
-      }
-    };
-    var step = (x) =>
-      x.done
-        ? resolve(x.value)
-        : Promise.resolve(x.value).then(fulfilled, rejected);
-    step((generator = generator.apply(__this, __arguments)).next());
-  });
-};
-
-// src/index.mts
-var main = (...args) =>
-  __async(void 0, null, function* () {
-    console.log(args);
-  });
-```
-
-If you'd like to use `es5` target, `@swc/core` is required.
-
-> The build output will be 143 lines of code to support es5.
+## 설치
 
 ```bash
-pnpm add -D @swc/core
-pnpm build
+npm install game-flip-tile
+# 또는
+yarn add game-flip-tile
+# 또는
+pnpm add game-flip-tile
 ```
 
-## `compilerOptions.module`
+## 사용법
 
-> `esnext` is set as the default value.
-
-The `module` option affects both development code and build output.
-
-### Module: `commonjs
-
-Development code:
+### 기본 사용법
 
 ```typescript
-const { useState } = require("react");
-module.exports.MyComponent = () => {
-  // ...
-};
+import { GameService, Prize } from "game-flip-tile";
+
+// 상품 정의
+const prizes: Prize[] = [
+  { id: 1, name: "1등 상품", value: 1000, quantity: 1 },
+  { id: 2, name: "2등 상품", value: 500, quantity: 3 },
+  { id: 3, name: "3등 상품", value: 100, quantity: 5 },
+];
+
+// 게임 서비스 생성
+const gameService = new GameService();
+
+// 게임 보드 생성 (10x10 = 100 타일)
+gameService.createBoard({
+  tileCount: 100,
+  prizes,
+});
+
+// 타일 뒤집기 (익명 사용자 ID 제공)
+gameService.flipTile(42, "anonymous_user_123");
+
+// 게임 완료 여부 확인
+const isComplete = gameService.isGameComplete();
+
+// 발견된 상품 확인
+const revealedPrizes = gameService.getRevealedPrizes();
 ```
 
-Build output:
-
-```javascript
-const react_1 = require("react");
-exports.MyComponent = () => {
-  // ...
-};
-```
-
-### Module: `esnext`
-
-Development code:
+### 게임 상태 저장 및 불러오기
 
 ```typescript
-import { useState } from "react";
-export const MyComponent = () => {
-  // ...
-};
+// 게임 상태 저장
+const savedData = gameService.exportGameData();
+localStorage.setItem("savedGame", JSON.stringify(savedData));
+
+// 게임 상태 불러오기
+const loadedData = JSON.parse(localStorage.getItem("savedGame") || "{}");
+gameService.loadGame(loadedData);
 ```
 
-Build output:
-
-```javascript
-import { useState } from "react";
-export const MyComponent = () => {
-  // ...
-};
-```
-
-## `compilerOptions.moduleResolution`
-
-> `node` is set as the default value.
-
-The `moduleResolution` option determines how TypeScript resolves files when it encounters import statements.
-
-### Why "bundler" is better than "node"
-
-- Stricter module resolution rules prevent ambiguous imports
-- Better performance in file resolution
-- Full support for package.json `exports` field
-- Better subpath imports handling
-- Clearer error messages for module resolution issues
-- More efficient type definition resolution
+### 게임 상태 변경 구독
 
 ```typescript
-// bundler does not allow ambiguous imports like the below.
-import { something } from "my-package/dist/utils"; // ❌
-import { something } from "my-package/utils"; // ✅
+// 게임 상태 변경 구독
+const unsubscribe = gameService.subscribe((state) => {
+  console.log("게임 상태가 변경되었습니다.");
+
+  if (state.isComplete) {
+    console.log("게임이 완료되었습니다!");
+  }
+});
+
+// 구독 해제
+unsubscribe();
 ```
 
-> Note: Use "node" resolution when you need to support legacy packages that don't have package.json `exports` field.
-
-# eslint for browser
-
-First, install the `globals` package.
-
-```bash
-pnpm add -D globals
-```
-
-Then, add globals to eslint config.
+### 커스텀 보드 크기 지정
 
 ```typescript
-// .eslint.config.ts
-import globals from "globals";
+// 너비 지정 (높이는 자동 계산)
+gameService.createBoard({
+  tileCount: 100,
+  width: 20, // 20x5 보드
+  prizes,
+});
 
-export default tseslint.config(
-  // ... exists config
-  {
-    globals: globals.browser,
-  },
-);
-```
-
-# Testing in Browser Environment
-
-First, install the `jsdom` package:
-
-```bash
-pnpm add -D jsdom
-```
-
-Then, update the environment setting in your vitest config:
-
-```typescript:vitest.config.ts
-import { defineConfig } from "vitest/config";
-
-export default defineConfig({
-  test: {
-    globals: true,
-    environment: "jsdom", // Changed from 'node' to 'jsdom'
-    testTimeout: 10000,
-  },
+// 높이 지정 (너비는 자동 계산)
+gameService.createBoard({
+  tileCount: 100,
+  height: 10, // 10x10 보드
+  prizes,
 });
 ```
 
-This configuration allows you to run tests that require browser APIs.
+## API 참조
 
-# devDependencies
+### 타입
 
-- [@types/node](https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/node)
-- [@typescript-eslint/eslint-plugin](https://github.com/typescript-eslint/typescript-eslint)
-- [@typescript-eslint/parser](https://github.com/typescript-eslint/typescript-eslint)
-- [@vitest/coverage-v8](https://github.com/vitest-dev/coverage-v8)
-- [eslint](https://eslint.org/)
-- [eslint-config-prettier](https://github.com/prettier/eslint-config-prettier) - Configuration to prevent conflicts between ESLint and Prettier
-- [eslint-plugin-prettier](https://github.com/prettier/eslint-plugin-prettier) - Runs Prettier as an ESLint rule
-- [jiti](https://github.com/unjs/jiti) - Runtime TypeScript executor with TypeScript and ESM support
-- [prettier](https://prettier.io/)
-- [rimraf](https://github.com/jprichardson/node-rimraf)
-- [ts-node](https://github.com/TypeStrong/ts-node)
-- [tsup](https://tsup.egoist.dev/)
-- [typescript](https://www.typescriptlang.org/)
-- [typescript-eslint](https://typescript-eslint.io/) - Collection of ESLint plugins and parsers for TypeScript
-- [vitest](https://vitest.dev/)
+#### `Tile`
+
+타일 정보를 나타내는 인터페이스입니다.
+
+```typescript
+interface Tile {
+  id: number;
+  isFlipped: boolean;
+  prize: Prize | null;
+  flippedBy?: string | null; // 어떤 사용자가 뒤집었는지 (ID만 저장)
+  flippedAt?: Date | null; // 언제 뒤집었는지
+}
+```
+
+#### `Prize`
+
+상품 정보를 나타내는 인터페이스입니다.
+
+```typescript
+interface Prize {
+  id: number;
+  name: string;
+  value: number;
+  quantity: number; // 이 상품이 몇 개의 타일에 배치될지
+}
+```
+
+#### `GameBoard`
+
+게임 보드 정보를 나타내는 인터페이스입니다.
+
+```typescript
+interface GameBoard {
+  id: string;
+  tiles: Tile[];
+  width: number;
+  height: number;
+  tileCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
+
+#### `GameState`
+
+게임 상태 정보를 나타내는 인터페이스입니다.
+
+```typescript
+interface GameState {
+  board: GameBoard;
+  logs: GameLog[];
+  isComplete: boolean;
+  prizes: Prize[];
+  settings: GameSettings;
+}
+```
+
+### 클래스
+
+#### `GameService`
+
+게임 상태를 관리하고 게임 로직을 캡슐화하는 서비스 클래스입니다.
+
+```typescript
+class GameService {
+  constructor(initialState?: GameState);
+
+  // 상태 관리
+  getState(): GameState;
+  dispatch(action: GameAction): void;
+  subscribe(listener: (state: GameState) => void): () => void;
+
+  // 게임 조작
+  createBoard(settings: GameSettings): void;
+  flipTile(tileId: number, playerId: string): void;
+  restartGame(settings?: GameSettings): void;
+  loadGame(savedData: SaveableGameData): void;
+
+  // 게임 정보
+  isGameComplete(): boolean;
+  getRevealedPrizes(): Prize[];
+  exportGameData(): SaveableGameData;
+}
+```
+
+## 개발
+
+### 설치
+
+```bash
+git clone https://github.com/your-username/game-flip-tile.git
+cd game-flip-tile
+pnpm install
+```
+
+### 스크립트
+
+- `pnpm dev`: 개발 모드로 실행
+- `pnpm build`: 패키지 빌드
+- `pnpm test`: 테스트 실행
+- `pnpm lint`: 린트 검사
+- `pnpm format`: 코드 포맷팅
+
+## 라이센스
+
+MIT
