@@ -14,6 +14,9 @@ importers:
       '@castore/event-storage-adapter-in-memory':
         specifier: ^2.4.1
         version: 2.4.1(@castore/core@2.4.1)
+      '@castore/message-queue-adapter-in-memory':
+        specifier: ^2.4.1
+        version: 2.4.1(@castore/core@2.4.1)
       rand-seed:
         specifier: ^2.1.7
         version: 2.1.7
@@ -100,6 +103,11 @@ packages:
 
   '@castore/event-storage-adapter-in-memory@2.4.1':
     resolution: {integrity: sha512-9v95FSzIx6vEyNFEMNC9zx/L6ceBZJICV1sgUcWAfxWy7RehbKxCREdPcYch54XpDwj8rdB2LVyWy1MXn1iSuA==}
+    peerDependencies:
+      '@castore/core': ^2.0.0
+
+  '@castore/message-queue-adapter-in-memory@2.4.1':
+    resolution: {integrity: sha512-05Xn5Er/QQiKfn6DKKUeCGA61DCjBFTyoXY+JdSofDdKONrZH2yLJ30JgyX1KC0fAPEYibvyM405LtgU4dOcGA==}
     peerDependencies:
       '@castore/core': ^2.0.0
 
@@ -1574,6 +1582,11 @@ snapshots:
   '@castore/event-storage-adapter-in-memory@2.4.1(@castore/core@2.4.1)':
     dependencies:
       '@castore/core': 2.4.1
+
+  '@castore/message-queue-adapter-in-memory@2.4.1(@castore/core@2.4.1)':
+    dependencies:
+      '@castore/core': 2.4.1
+      fastq: 1.19.0
 
   '@cspotcode/source-map-support@0.8.1':
     dependencies:

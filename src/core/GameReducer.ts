@@ -2,19 +2,22 @@ import type { Reducer } from "@castore/core";
 import type { MyEventTypeDetails } from "../events";
 import { createBoard } from "../utils/board-util";
 import { distributePrizes } from "../utils/prize-util";
-import { flipTile } from "../utils/tile-utils";
 import type { GameAggregate } from "./GameAggregate";
 
+/**
+ * 게임 이벤트 리듀서
+ *
+ * 이벤트 리듀서는 상태를 가지지 않고 단순히 이벤트에 대한 처리 방법만 제공하기 때문에 재사용 가능합니다.
+ *
+ * @param aggregate 게임 집계
+ * @param event 이벤트
+ * @returns 업데이트된 게임 집계
+ */
 export const gameReducer: Reducer<GameAggregate, MyEventTypeDetails> = (
   aggregate,
   event,
 ) => {
   const { version } = event;
-
-  // if (event.metadata.handled) {
-  //   console.warn("handled event... skip.");
-  //   return aggregate;
-  // }
 
   // 이벤트 유형에 따른 처리
   switch (event.type) {
@@ -36,17 +39,17 @@ export const gameReducer: Reducer<GameAggregate, MyEventTypeDetails> = (
 
     case "FLIP_TILE": {
       const { board } = aggregate;
-      const { tileId, flippedBy } = event.payload;
+      const { tileIndex, flippedBy } = event.payload;
 
-      const tile = board?.tiles.find((t) => t.id === tileId);
+      const tile = board?.tiles[tileIndex];
       if (!tile) {
-        throw new Error(`타일을 찾을 수 없습니다: ${tileId}`);
+        throw new Error(`타일[${tileIndex}]을 찾을 수 없습니다`);
       }
 
       // 타일 뒤집기
-      if (!tile.flipped) {
-        flipTile(tile, flippedBy);
-      }
+      tile.flipped = true;
+      tile.flippedBy = flippedBy;
+      tile.flippedAt = event.timestamp;
 
       return {
         ...aggregate,

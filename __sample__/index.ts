@@ -1,7 +1,6 @@
-import { game, gameService } from "../src/core/Game";
+import { GameController } from "../src/core/GameController";
 import { Prize } from "../src/types/prize";
 import { BoardSetting, PrizeSetting, Settings } from "../src/types/settings";
-
 // 상품 정의
 const prize1: Prize = { id: "1", name: "1등 상품", value: 1000 };
 const prize2: Prize = { id: "2", name: "2등 상품", value: 500 };
@@ -41,24 +40,32 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 async function simulateGame() {
   const gameId = "this-is-game-id";
 
-  const { gameState: initialGameState } = await game.init(gameId, settings);
+  const initialGameState = await GameController.initGame(gameId, settings);
 
   console.log("게임이 초기화 되었습니다.");
 
   // 각 타일의 ID 추출
-  const tileIds = initialGameState?.board?.tiles.map((tile) => tile.id) || [];
+  const tileIndices =
+    initialGameState?.board?.tiles.map((tile) => tile.index) || [];
 
   // 모든 타일을 무작위 순서로 뒤집기
-  for (let i = 0; i < tileIds.length; i++) {
+  for (let i = 0; i < tileIndices.length; i++) {
     const userId = userIds[i % userIds.length];
-    const tileId = tileIds[i];
+    const tileIndex = tileIndices[i];
 
-    console.log(`사용자 ${userId}가 타일 ${tileId}를 뒤집습니다.`);
+    console.log(`사용자 ${userId}가 타일 ${tileIndex}를 뒤집습니다.`);
     try {
-      const { tile: flippedTile } = await game.flipTile(gameId, tileId, userId);
-      if (flippedTile?.prize) {
+      const gameAggregate = await GameController.flipTile(
+        gameId,
+        tileIndex,
+        userId,
+      );
+      const foundTile = gameAggregate?.board?.tiles?.find(
+        (tile) => tile.index === tileIndex,
+      );
+      if (foundTile?.prize) {
         console.log(
-          `FLIP RESULT: ${flippedTile.prize.name}을(를) 발견했습니다! 🎉🎉🎉`,
+          `FLIP RESULT: ${foundTile.prize.name}을(를) 발견했습니다! 🎉🎉🎉`,
         );
       } else {
         console.log("FLIP RESULT: 아무것도 발견하지 못했습니다 🤯");
@@ -69,10 +76,14 @@ async function simulateGame() {
   }
 
   // 게임 상태 확인
-  const { gameState: finalGameState } = await game.getGame(gameId);
+  const { gameState: finalGameState } = await GameController.getGame(gameId);
+  console.log(
+    "prize tiles",
+    finalGameState.board?.tiles.filter((tile) => tile.prize),
+  );
   console.log("최종 게임 상태:", finalGameState);
 
-  const events = await gameService.save(gameId);
+  const events = await GameController.save(gameId);
   console.log("최종 게임 이벤트 데이터", events);
 }
 

@@ -1,10 +1,10 @@
-import type { GameState } from "../types/GameInstance";
+import type { Game } from "../types/game";
 import type { Settings } from "../types/settings";
 import { generateId } from "./id";
 
-export const createGame = (settings: Settings): GameState => {
+export const createGame = (settings: Settings): Game => {
   const gameId = generateId();
-  const now = new Date();
+  const now = new Date().toISOString();
   return {
     gameId,
     board: null,
@@ -15,10 +15,10 @@ export const createGame = (settings: Settings): GameState => {
   };
 };
 
-export const serializeGame = (state: GameState) => {
+export const serializeGame = (state: Game) => {
   return JSON.stringify(state);
 };
 
-export const deserializeGame = (state: string): GameState => {
+export const deserializeGame = (state: string): Game => {
   return JSON.parse(state);
 };

@@ -1,4 +1,4 @@
-import type { Board } from "../types/GameInstance";
+import type { Board } from "../types/game";
 import type { BoardOrientation } from "../types/orientation";
 import type { BoardSetting } from "../types/settings";
 import { createEmptyTiles } from "./tile-utils";

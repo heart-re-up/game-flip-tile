@@ -61,6 +61,7 @@
 	"dependencies": {
 		"@castore/core": "^2.4.1",
 		"@castore/event-storage-adapter-in-memory": "^2.4.1",
+		"@castore/message-queue-adapter-in-memory": "^2.4.1",
 		"rand-seed": "^2.1.7"
 	}
 }

@@ -17,23 +17,11 @@ var __spreadValues = (a, b) => {
   return a;
 };
 var __spreadProps = (a, b) => __defProps(a, __getOwnPropDescs(b));
-var __objRest = (source, exclude) => {
-  var target = {};
-  for (var prop in source)
-    if (__hasOwnProp.call(source, prop) && exclude.indexOf(prop) < 0)
-      target[prop] = source[prop];
-  if (source != null && __getOwnPropSymbols)
-    for (var prop of __getOwnPropSymbols(source)) {
-      if (exclude.indexOf(prop) < 0 && __propIsEnum.call(source, prop))
-        target[prop] = source[prop];
-    }
-  return target;
-};
 
-// src/commands/commandFlipTile.ts
+// src/commands/FCommandFlipTile.ts
 import { Command, tuple } from "@castore/core";
 
-// src/core/GameStore.ts
+// src/core/GameEventStore.ts
 import { EventStore } from "@castore/core";
 import { InMemoryEventStorageAdapter } from "@castore/event-storage-adapter-in-memory";
 
@@ -67,11 +55,6 @@ var createEmptyTiles = (tileCount, gameId) => {
       flippedAt: null
     };
   });
-};
-var flipTile = (tile, userId) => {
-  tile.flipped = true;
-  tile.flippedBy = userId;
-  tile.flippedAt = /* @__PURE__ */ new Date();
 };
 
 // src/utils/board-util.ts
@@ -163,14 +146,14 @@ var gameReducer = (aggregate, event) => {
     }
     case "FLIP_TILE": {
       const { board } = aggregate;
-      const { tileId, flippedBy } = event.payload;
-      const tile = board == null ? void 0 : board.tiles.find((t) => t.id === tileId);
+      const { tileIndex, flippedBy } = event.payload;
+      const tile = board == null ? void 0 : board.tiles[tileIndex];
       if (!tile) {
-        throw new Error(`\uD0C0\uC77C\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4: ${tileId}`);
+        throw new Error(`\uD0C0\uC77C[${tileIndex}]\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4`);
       }
-      if (!tile.flipped) {
-        flipTile(tile, flippedBy);
-      }
+      tile.flipped = true;
+      tile.flippedBy = flippedBy;
+      tile.flippedAt = event.timestamp;
       return __spreadProps(__spreadValues({}, aggregate), {
         version,
         updatedAt: event.timestamp
@@ -181,61 +164,98 @@ var gameReducer = (aggregate, event) => {
   }
 };
 
-// src/core/GameStore.ts
-var eventStorageAdapter = new InMemoryEventStorageAdapter();
-var gameEventStore = new EventStore({
-  eventStoreId: "GAME",
+// src/core/GameEventStore.ts
+var createEventStore = () => new EventStore({
+  eventStoreId: EVENT_STORE_ID,
   eventTypes: myEventTypes,
-  eventStorageAdapter,
-  reducer: gameReducer
-  // aggregateCache: {
-  //   maxSize: 100,
-  //   ttl: 60 * 1000, // 1분
-  // },
+  eventStorageAdapter: new InMemoryEventStorageAdapter(),
+  reducer: gameReducer,
+  simulateSideEffect: (indexedEvents, event) => {
+    console.log("simulateSideEffect", indexedEvents, event);
+    return indexedEvents;
+  }
 });
+var EVENT_STORE_ID = "FLIP_GAME";
+var eventStore = createEventStore();
 
-// src/commands/commandFlipTile.ts
-var commandFlipTile = new Command({
+// src/core/GameMessageQueue.ts
+import {
+  AggregateExistsMessageQueue,
+  NotificationMessageQueue,
+  StateCarryingMessageQueue
+} from "@castore/core";
+import { InMemoryMessageQueueAdapter } from "@castore/message-queue-adapter-in-memory";
+var defaultWorker = async (message) => {
+  console.log(">>> defaultWorker: ", message);
+};
+var gameMessageQueue = null;
+var initGameMessageQueue = (messageQueueId) => {
+  switch (messageQueueId) {
+    case "GAME_MESSAGE_QUEUE":
+      gameMessageQueue = new NotificationMessageQueue({
+        messageQueueId: "GAME_MESSAGE_QUEUE",
+        sourceEventStores: [eventStore]
+      });
+      break;
+    case "GAME_AGGREGATE_EXISTS_MESSAGE_QUEUE":
+      gameMessageQueue = new AggregateExistsMessageQueue({
+        messageQueueId: "GAME_AGGREGATE_EXISTS_MESSAGE_QUEUE",
+        sourceEventStores: [eventStore]
+      });
+      break;
+    case "GAME_STATE_CARRYING_MESSAGE_QUEUE":
+      gameMessageQueue = new StateCarryingMessageQueue({
+        messageQueueId: "GAME_STATE_CARRYING_MESSAGE_QUEUE",
+        sourceEventStores: [eventStore]
+      });
+      break;
+  }
+  InMemoryMessageQueueAdapter.attachTo(gameMessageQueue, {
+    worker: defaultWorker
+  });
+};
+var getMessageQueue = () => {
+  return gameMessageQueue;
+};
+
+// src/commands/FCommandFlipTile.ts
+var CommandFlipTile = new Command({
   commandId: "FLIP_TILE",
   // 👇 "tuple" is needed to keep ordering in inferred type
-  requiredEventStores: tuple(gameEventStore),
+  requiredEventStores: tuple(eventStore),
   // 👇 Code to execute
-  handler: async (input, [gameEventStore2]) => {
-    var _b, _c, _d, _e;
-    const _a = input, { gameId } = _a, payload = __objRest(_a, ["gameId"]);
-    const { aggregate } = await gameEventStore2.getAggregate(gameId);
-    const tile = (_b = aggregate == null ? void 0 : aggregate.board) == null ? void 0 : _b.tiles.find((t) => t.id === payload.tileId);
-    if (tile == null ? void 0 : tile.flipped) {
-      return { tile };
-    }
-    const version = (_c = aggregate == null ? void 0 : aggregate.version) != null ? _c : 1;
-    const result = await gameEventStore2.pushEvent({
+  handler: async (input, [eventStore2]) => {
+    var _a, _b;
+    const { gameId, tileIndex, flippedBy } = input;
+    const { aggregate } = await eventStore2.getAggregate(gameId);
+    const version = (_a = aggregate == null ? void 0 : aggregate.version) != null ? _a : 0;
+    const event = {
       aggregateId: gameId,
       version: version + 1,
       type: FlipTileEventType.type,
-      payload,
+      payload: { tileIndex, flippedBy },
       metadata: {}
-    });
-    console.log("nextAggregate", result.nextAggregate);
-    const updatedTile = (_e = (_d = result.nextAggregate) == null ? void 0 : _d.board) == null ? void 0 : _e.tiles.find(
-      (tile2) => tile2.id === payload.tileId
-    );
-    return {
-      tile: updatedTile
     };
+    const nextAggregate = (_b = (await eventStore2.pushEvent(event)).nextAggregate) != null ? _b : (await eventStore2.getExistingAggregate(gameId)).aggregate;
+    getMessageQueue().publishMessage({
+      eventStoreId: EVENT_STORE_ID,
+      event: __spreadProps(__spreadValues({}, event), { timestamp: (/* @__PURE__ */ new Date()).toISOString() }),
+      aggregate: nextAggregate
+    });
+    return nextAggregate;
   }
 });
 
-// src/commands/commandGetGame.ts
+// src/commands/FCommandGetGame.ts
 import { Command as Command2, tuple as tuple2 } from "@castore/core";
-var commandGetGame = new Command2({
+var CommandGetGame = new Command2({
   commandId: "GET_GAME",
   // 👇 "tuple" is needed to keep ordering in inferred type
-  requiredEventStores: tuple2(gameEventStore),
+  requiredEventStores: tuple2(eventStore),
   // 👇 Code to execute
-  handler: async (input, [gameEventStore2]) => {
+  handler: async (input, [eventStore2]) => {
     const { gameId } = input;
-    const { aggregate: gameState } = await gameEventStore2.getAggregate(gameId);
+    const { aggregate: gameState } = await eventStore2.getAggregate(gameId);
     if (gameState === void 0) {
       throw new Error("Game not found");
     }
@@ -243,44 +263,58 @@ var commandGetGame = new Command2({
   }
 });
 
-// src/commands/commandInitGame.ts
+// src/commands/FCommandInitGame.ts
 import { Command as Command3, tuple as tuple3 } from "@castore/core";
-var commandInitGame = new Command3({
+var CommandInitGame = new Command3({
   commandId: "INIT_GAME",
   // 👇 "tuple" is needed to keep ordering in inferred type
-  requiredEventStores: tuple3(gameEventStore),
+  requiredEventStores: tuple3(eventStore),
   // 👇 Code to execute
-  handler: async (input, [gameEventStore2]) => {
+  handler: async (input, [eventStore2]) => {
+    var _a, _b;
     const { gameId, settings: settings2 } = input;
-    const result = await gameEventStore2.pushEvent({
+    const { aggregate } = await eventStore2.getAggregate(gameId);
+    const version = (_a = aggregate == null ? void 0 : aggregate.version) != null ? _a : 0;
+    const event = {
       aggregateId: gameId,
-      version: 1,
+      version: version + 1,
       type: InitGameEventType.type,
       payload: { gameId, settings: settings2 },
       metadata: {}
+    };
+    const nextAggregate = (_b = (await eventStore2.pushEvent(event)).nextAggregate) != null ? _b : (await eventStore2.getExistingAggregate(gameId)).aggregate;
+    getMessageQueue().publishMessage({
+      eventStoreId: EVENT_STORE_ID,
+      event: __spreadProps(__spreadValues({}, event), { timestamp: (/* @__PURE__ */ new Date()).toISOString() }),
+      aggregate: nextAggregate
     });
-    const nextAggregate = result.nextAggregate;
-    console.log("initilized game: ", nextAggregate == null ? void 0 : nextAggregate.gameId);
-    return { gameState: nextAggregate };
+    return nextAggregate;
   }
 });
 
-// src/core/Game.ts
-var game = {
-  init: async (gameId, settings2) => commandInitGame.handler({ gameId, settings: settings2 }, [gameEventStore]),
-  getGame: async (gameId) => commandGetGame.handler({ gameId }, [gameEventStore]),
-  flipTile: async (gameId, tileId, userId) => commandFlipTile.handler({ gameId, tileId, flippedBy: userId }, [
-    gameEventStore
-  ])
-};
-var gameService = {
+// src/core/GameController.ts
+initGameMessageQueue("GAME_STATE_CARRYING_MESSAGE_QUEUE");
+var GameController = {
+  initGame: async (gameId, settings2) => {
+    const input = { gameId, settings: settings2 };
+    return CommandInitGame.handler(input, [eventStore]);
+  },
+  getGame: async (gameId) => {
+    const input = { gameId };
+    return CommandGetGame.handler(input, [eventStore]);
+  },
+  flipTile: async (gameId, tileIndex, userId) => {
+    const input = { gameId, tileIndex, flippedBy: userId };
+    return CommandFlipTile.handler(input, [eventStore]);
+  },
   save: async (gameId) => {
-    const events = await gameEventStore.getEvents(gameId);
+    const events = await eventStore.getEvents(gameId);
     return JSON.stringify(events);
   },
   restore: async (events) => {
-    JSON.parse(events).forEach((event) => {
-      gameEventStore.pushEvent(event);
+    const parsed = JSON.parse(events);
+    parsed.events.forEach((event) => {
+      eventStore.pushEvent(event);
     });
   }
 };
@@ -313,20 +347,27 @@ var settings = {
 };
 var userIds = ["user1", "user2", "user3", "user4", "user5"];
 async function simulateGame() {
-  var _a;
+  var _a, _b, _c, _d;
   const gameId = "this-is-game-id";
-  const { gameState: initialGameState } = await game.init(gameId, settings);
+  const initialGameState = await GameController.initGame(gameId, settings);
   console.log("\uAC8C\uC784\uC774 \uCD08\uAE30\uD654 \uB418\uC5C8\uC2B5\uB2C8\uB2E4.");
-  const tileIds = ((_a = initialGameState == null ? void 0 : initialGameState.board) == null ? void 0 : _a.tiles.map((tile) => tile.id)) || [];
-  for (let i = 0; i < tileIds.length; i++) {
+  const tileIndices = ((_a = initialGameState == null ? void 0 : initialGameState.board) == null ? void 0 : _a.tiles.map((tile) => tile.index)) || [];
+  for (let i = 0; i < tileIndices.length; i++) {
     const userId = userIds[i % userIds.length];
-    const tileId = tileIds[i];
-    console.log(`\uC0AC\uC6A9\uC790 ${userId}\uAC00 \uD0C0\uC77C ${tileId}\uB97C \uB4A4\uC9D1\uC2B5\uB2C8\uB2E4.`);
+    const tileIndex = tileIndices[i];
+    console.log(`\uC0AC\uC6A9\uC790 ${userId}\uAC00 \uD0C0\uC77C ${tileIndex}\uB97C \uB4A4\uC9D1\uC2B5\uB2C8\uB2E4.`);
     try {
-      const { tile: flippedTile } = await game.flipTile(gameId, tileId, userId);
-      if (flippedTile == null ? void 0 : flippedTile.prize) {
+      const gameAggregate = await GameController.flipTile(
+        gameId,
+        tileIndex,
+        userId
+      );
+      const foundTile = (_c = (_b = gameAggregate == null ? void 0 : gameAggregate.board) == null ? void 0 : _b.tiles) == null ? void 0 : _c.find(
+        (tile) => tile.index === tileIndex
+      );
+      if (foundTile == null ? void 0 : foundTile.prize) {
         console.log(
-          `FLIP RESULT: ${flippedTile.prize.name}\uC744(\uB97C) \uBC1C\uACAC\uD588\uC2B5\uB2C8\uB2E4! \u{1F389}\u{1F389}\u{1F389}`
+          `FLIP RESULT: ${foundTile.prize.name}\uC744(\uB97C) \uBC1C\uACAC\uD588\uC2B5\uB2C8\uB2E4! \u{1F389}\u{1F389}\u{1F389}`
         );
       } else {
         console.log("FLIP RESULT: \uC544\uBB34\uAC83\uB3C4 \uBC1C\uACAC\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4 \u{1F92F}");
@@ -335,9 +376,13 @@ async function simulateGame() {
       console.error(`\uD0C0\uC77C \uB4A4\uC9D1\uAE30 \uC624\uB958: ${error.message}`);
     }
   }
-  const { gameState: finalGameState } = await game.getGame(gameId);
+  const { gameState: finalGameState } = await GameController.getGame(gameId);
+  console.log(
+    "prize tiles",
+    (_d = finalGameState.board) == null ? void 0 : _d.tiles.filter((tile) => tile.prize)
+  );
   console.log("\uCD5C\uC885 \uAC8C\uC784 \uC0C1\uD0DC:", finalGameState);
-  const events = await gameService.save(gameId);
+  const events = await GameController.save(gameId);
   console.log("\uCD5C\uC885 \uAC8C\uC784 \uC774\uBCA4\uD2B8 \uB370\uC774\uD130", events);
 }
 console.log("\uAC8C\uC784\uC744 \uC2DC\uC791\uD569\uB2C8\uB2E4...");

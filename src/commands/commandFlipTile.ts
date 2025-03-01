@@ -1,46 +1,41 @@
 import { Command, tuple } from "@castore/core";
-import { gameEventStore } from "../core/GameStore";
-import {
-  FlipTileEventType,
-  type FlipTileEventDetail,
-} from "../events/FlipTileEvent";
-import type { Tile } from "../types/tile";
+import type { GameAggregate } from "../core/GameAggregate";
+import { EVENT_STORE_ID, eventStore } from "../core/GameEventStore";
+import { getMessageQueue } from "../core/GameMessageQueue";
+import { EventFlipTileType } from "../events/EventFlipTile";
+import type {
+  EventFlipTileMetadata,
+  EventFlipTilePayload,
+} from "../events/EventFlipTile.type";
 
-type Input = FlipTileEventDetail["payload"] & { gameId: string };
-type Output = { tile: Tile | undefined };
+type Output = GameAggregate;
 
-export const commandFlipTile = new Command({
-  commandId: "FLIP_TILE",
-  // 👇 "tuple" is needed to keep ordering in inferred type
-  requiredEventStores: tuple(gameEventStore),
-  // 👇 Code to execute
-  handler: async (input: Input, [gameEventStore]): Promise<Output> => {
-    const { gameId, ...payload } = input;
-
-    // 현재 게임 상태 확인
-    const { aggregate } = await gameEventStore.getAggregate(gameId);
-    const tile = aggregate?.board?.tiles.find((t) => t.id === payload.tileId);
-    // 이미 뒤집힌 타일인지 확인
-    if (tile?.flipped) {
-      return { tile };
-    }
-
-    const version = aggregate?.version ?? 1;
-    const result = await gameEventStore.pushEvent({
-      aggregateId: gameId,
+export const CommandFlipTile = new Command({
+  commandId: EventFlipTileType.type,
+  requiredEventStores: tuple(eventStore),
+  handler: async (
+    input: EventFlipTilePayload,
+    [eventStore],
+    context: EventFlipTileMetadata,
+  ): Promise<Output> => {
+    const { aggregateId } = context;
+    const { aggregate } = await eventStore.getAggregate(aggregateId);
+    const version = aggregate?.version ?? 0;
+    const event = {
+      aggregateId,
       version: version + 1,
-      type: FlipTileEventType.type,
-      payload,
-      metadata: {},
-    });
-
-    // 업데이트된 게임 상태 가져오기
-    console.log("nextAggregate", result.nextAggregate);
-    const updatedTile = result.nextAggregate?.board?.tiles.find(
-      (tile) => tile.id === payload.tileId,
-    );
-    return {
-      tile: updatedTile,
+      type: EventFlipTileType.type,
+      payload: input,
+      metadata: context,
     };
+    const nextAggregate =
+      (await eventStore.pushEvent(event)).nextAggregate ??
+      (await eventStore.getExistingAggregate(aggregateId)).aggregate;
+    getMessageQueue().publishMessage({
+      eventStoreId: EVENT_STORE_ID,
+      event: { ...event, timestamp: new Date().toISOString() },
+      aggregate: nextAggregate,
+    });
+    return nextAggregate;
   },
 });

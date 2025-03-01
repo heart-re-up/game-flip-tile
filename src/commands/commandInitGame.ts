@@ -1,31 +1,41 @@
 import { Command, tuple } from "@castore/core";
-import { gameEventStore } from "../core/GameStore";
-import { InitGameEventType } from "../events/InitGameEvent";
-import type { GameState } from "../types/GameInstance";
-import type { Settings } from "../types/settings";
+import type { GameAggregate } from "../core/GameAggregate";
+import { EVENT_STORE_ID, eventStore } from "../core/GameEventStore";
+import { getMessageQueue } from "../core/GameMessageQueue";
+import { EventInitGameType } from "../events/EventInitGame";
+import type {
+  EventInitGameMetadata,
+  EventInitGamePayload,
+} from "../events/EventInitGame.type";
 
-type Input = { gameId: string; settings: Settings };
-type Output = { gameState: GameState };
+type Output = GameAggregate;
 
-export const commandInitGame = new Command({
-  commandId: "INIT_GAME",
-  // 👇 "tuple" is needed to keep ordering in inferred type
-  requiredEventStores: tuple(gameEventStore),
-  // 👇 Code to execute
-  handler: async (input: Input, [gameEventStore]): Promise<Output> => {
-    const { gameId, settings } = input;
-    const result = await gameEventStore.pushEvent({
-      aggregateId: gameId,
-      version: 1,
-      type: InitGameEventType.type,
-      payload: { gameId, settings },
-      metadata: {},
+export const CommandInitGame = new Command({
+  commandId: EventInitGameType.type,
+  requiredEventStores: tuple(eventStore),
+  handler: async (
+    input: EventInitGamePayload,
+    [eventStore],
+    context: EventInitGameMetadata,
+  ): Promise<Output> => {
+    const { aggregateId } = context;
+    const { aggregate } = await eventStore.getAggregate(aggregateId);
+    const version = aggregate?.version ?? 0;
+    const event = {
+      aggregateId,
+      version: version + 1,
+      type: EventInitGameType.type,
+      payload: input,
+      metadata: context,
+    };
+    const nextAggregate =
+      (await eventStore.pushEvent(event)).nextAggregate ??
+      (await eventStore.getExistingAggregate(aggregateId)).aggregate;
+    getMessageQueue().publishMessage({
+      eventStoreId: EVENT_STORE_ID,
+      event: { ...event, timestamp: new Date().toISOString() },
+      aggregate: nextAggregate,
     });
-    const nextAggregate = result.nextAggregate;
-    console.log("initilized game: ", nextAggregate?.gameId);
-    // nextAggregate?.board?.tiles.forEach((tile) => {
-    //   console.log(`tile[${tile.index}]:`, tile.prize?.name);
-    // });
-    return { gameState: nextAggregate as GameState };
+    return nextAggregate;
   },
 });
